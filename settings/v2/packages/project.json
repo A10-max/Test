@@ -1,0 +1,37 @@
+{
+  "__version__": "1.0.6",
+  "general": {
+    "designResolution": {
+      "width": 1080,
+      "height": 1920,
+      "fitHeight": true
+    }
+  },
+  "custom_joint_texture_layouts": [],
+  "layer": [
+    {
+      "name": "Player",
+      "value": 1
+    },
+    {
+      "name": "BackGround",
+      "value": 2
+    },
+    {
+      "name": "Payer",
+      "value": 4
+    }
+  ],
+  "physics": {
+    "collisionGroups": [
+      {
+        "index": 1,
+        "name": "Player"
+      }
+    ],
+    "collisionMatrix": {
+      "0": 3,
+      "1": 3
+    }
+  }
+}
