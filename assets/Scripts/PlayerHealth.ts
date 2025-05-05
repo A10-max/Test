@@ -56,6 +56,7 @@ export class PlayerHealth extends Component {
     }
 
     private takeDamage(dt: number) {
+        console.log("Taking damage!");
         this.currentHealth -= this.healthDecreaseRate * dt;
         if (this.currentHealth <= 0) {
             this.currentHealth = 0;

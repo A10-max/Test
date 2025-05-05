@@ -26,7 +26,7 @@ export class WaterRise extends Component {
         const currentPosition = this.node.position;
         this.node.setPosition(currentPosition.x, currentPosition.y + this.riseSpeed * deltaTime, currentPosition.z);
     
-        const playerY = this.playerHealthNode.node.worldPosition.y;
+        const playerY = this.playerHealthNode.node.y - 400;
         const waterY = this.node.worldPosition.y;
     
         if (!this.playerHealthNode) return;

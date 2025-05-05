@@ -10,35 +10,70 @@ export class PlayerMovement extends Component {
     forwardDistance: number = 2;
 
     @property
-    jumpDuration: number = 0.2; // Faster jump
+    jumpDuration: number = 0.2;
+
+    @property
+    bounceHeight: number = 0.3;
+    
+    @property
+    bounceDuration: number = 0.1;
+
+    @property
+    stepHeightOffset: number = 0.2; // Offset above original step Y
 
     private isJumping: boolean = false;
+    private isBouncing: boolean = false;
     private jumpTimer: number = 0;
+    private bounceTimer: number = 0;
+
     private startPos: Vec3 = v3();
     private peakPos: Vec3 = v3();
+    private endPos: Vec3 = v3();
 
     update(deltaTime: number) {
-        if (!this.isJumping) return;
+        if (this.isJumping) {
+            this.jumpTimer += deltaTime;
+            const t = this.jumpTimer / this.jumpDuration;
 
-        this.jumpTimer += deltaTime;
-        const t = this.jumpTimer / this.jumpDuration;
+            if (t >= 1) {
+                this.isJumping = false;
+                this.isBouncing = true;
+                this.bounceTimer = 0;
 
-        if (t >= 1) {
-            this.isJumping = false;
-            this.node.setPosition(this.peakPos);
-            return;
+                // Start bounce from peak to slightly higher than previous Y
+                this.startPos = this.peakPos.clone();
+                this.endPos = v3(
+                    this.peakPos.x,
+                    this.startPos.y - this.bounceHeight + this.stepHeightOffset,
+                    this.peakPos.z
+                );
+                return;
+            }
+
+            const easedT = 1 - Math.pow(1 - t, 3);
+            const x = this.lerp(this.startPos.x, this.peakPos.x, easedT);
+            const y = this.lerp(this.startPos.y, this.peakPos.y, easedT);
+            this.node.setPosition(x, y, this.startPos.z);
         }
 
-        const easedT = 1 - Math.pow(1 - t, 3); 
+        if (this.isBouncing) {
+            this.bounceTimer += deltaTime;
+            const t = this.bounceTimer / this.bounceDuration;
 
-        const x = this.lerp(this.startPos.x, this.peakPos.x, easedT);
-        const y = this.lerp(this.startPos.y, this.peakPos.y, easedT);
+            if (t >= 1) {
+                this.isBouncing = false;
+                this.node.setPosition(this.endPos);
+                return;
+            }
 
-        this.node.setPosition(x, y, this.startPos.z);
+            const bounceT = 1 - Math.pow(1 - t, 2);
+            const y = this.lerp(this.startPos.y, this.endPos.y, bounceT);
+            this.node.setPosition(this.startPos.x, y, this.startPos.z);
+        }
     }
 
     public jumpToNextStep() {
-        if (this.isJumping) return;
+        if (this.isJumping || this.isBouncing) return;
 
         this.startPos = this.node.position.clone();
         this.peakPos = v3(

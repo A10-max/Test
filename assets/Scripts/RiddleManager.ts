@@ -1,4 +1,4 @@
-import { _decorator, Component, Label, Node, Sprite, SpriteFrame, Input, input, KeyCode, Tween, tween, Vec3, Color, Prefab, instantiate, EventKeyboard } from 'cc';
+import { _decorator, Component, Label, Node, Sprite, SpriteFrame, Input, input, KeyCode, Tween, tween, Vec3, Color, Prefab, instantiate, EventKeyboard, EditBox, UIOpacity } from 'cc';
 import { PlayerMovement } from './PlayerMovement';
 const { ccclass, property } = _decorator;
 
@@ -28,6 +28,10 @@ export class RiddleManager extends Component {
 
     @property(PlayerMovement)
     playerMovement: PlayerMovement = null!;
+
+    @property(EditBox)
+    mobileInput: EditBox = null!;
+
 
     private letterDictionary: Map<string, SpriteFrame> = new Map();
     private riddlePairs: { riddle: string; answer: string; }[] = [
@@ -136,6 +140,7 @@ export class RiddleManager extends Component {
         this.initLetterDictionary();
         this.shuffleRiddles();
         this.showNextRiddle();
+        this.mobileInput.node.on(EditBox.EventType.TEXT_CHANGED, this.onMobileInput, this);
         input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
     }
 
@@ -164,6 +169,10 @@ export class RiddleManager extends Component {
 
         this.setupLetterSlots(this.currentAnswer.length);
         this.currentLetterIndex = 0;
+
+        this.scheduleOnce(() => {
+            this.mobileInput.setFocus();
+        }, 0.1);
     }
 
     getHint(answer: string): string {
@@ -214,23 +223,23 @@ export class RiddleManager extends Component {
     onKeyDown(event: EventKeyboard) {
         const key = String.fromCharCode(event.keyCode);
         if (!/^[A-Z]$/.test(key)) return;
-
+    
         const expectedLetter = this.currentAnswer[this.currentLetterIndex];
-
+    
         if (key === expectedLetter) {
             const sprite = this.letterSlots[this.currentLetterIndex];
             sprite.spriteFrame = this.letterDictionary.get(key);
             this.popEffect(sprite.node);
-
+    
             this.currentLetterIndex++;
             this.score += 10;
             this.updateScore();
-
+    
             if (this.currentLetterIndex >= this.currentAnswer.length) {
                 this.score += 50;
-            
+                this.updateScore();
                 this.playerMovement.jumpToNextStep();
-            
+    
                 this.currentRiddleIndex++;
                 if (this.currentRiddleIndex >= this.riddlePairs.length) {
                     this.winGame();
@@ -238,15 +247,108 @@ export class RiddleManager extends Component {
                     this.scheduleOnce(() => this.showNextRiddle(), 1.5);
                 }
             }
-            
         } else {
             this.score = Math.max(0, this.score - 5);
             const sprite = this.letterSlots[this.currentLetterIndex];
-            sprite.spriteFrame = this.letterDictionary.get(key);
-            this.wrongEffect(sprite);
+            this.showWrongLetter(sprite);
             this.updateScore();
         }
     }
+
+    onMobileInput(editBox: EditBox) {
+        const inputText = editBox.string.trim().toUpperCase();
+        if (inputText.length === 0) return;
+    
+        const key = inputText[0]; // Only process first letter typed
+        editBox.string = ''; // Clear input box after 1 letter
+    
+        if (!/^[A-Z]$/.test(key)) return;
+    
+        const expectedLetter = this.currentAnswer[this.currentLetterIndex];
+    
+        if (key === expectedLetter) {
+            const sprite = this.letterSlots[this.currentLetterIndex];
+            sprite.spriteFrame = this.letterDictionary.get(key);
+            this.popEffect(sprite.node);
+    
+            this.currentLetterIndex++;
+            this.score += 10;
+            this.updateScore();
+    
+            if (this.currentLetterIndex >= this.currentAnswer.length) {
+                this.score += 50;
+                this.updateScore();
+                this.playerMovement.jumpToNextStep();
+    
+                this.currentRiddleIndex++;
+                if (this.currentRiddleIndex >= this.riddlePairs.length) {
+                    this.winGame();
+                } else {
+                    this.scheduleOnce(() => this.showNextRiddle(), 1.5);
+                }
+            }
+        } else {
+            this.score = Math.max(0, this.score - 5);
+            const sprite = this.letterSlots[this.currentLetterIndex];
+            this.showWrongLetter(sprite);
+            this.updateScore();
+        }
+    }
+    
+
+    showWrongLetter(slot: Sprite) {
+        Tween.stopAllByTarget(slot.node);
+    
+        const originalColor = slot.color.clone();
+        const originalPos = slot.node.getPosition();
+    
+        slot.color = Color.RED;
+    
+        let elapsed = 0;
+        const shakeDuration = 0.3;
+        const shakeInterval = 1 / 60;
+    
+        const shake = () => {
+            if (elapsed >= shakeDuration) {
+                slot.node.setPosition(originalPos);
+                slot.color = originalColor;
+    
+                //this.fadeOutWrongLetter(slot, originalColor, originalPos);
+                return;
+            }
+    
+            const offset = Math.sin(elapsed * 40) * 5;
+            slot.node.setPosition(originalPos.x + offset, originalPos.y);
+            elapsed += shakeInterval;
+            setTimeout(shake, shakeInterval * 1000);
+        };
+    
+        shake();
+    }
+    
+    fadeOutWrongLetter(slot: Sprite, originalColor: Color, originalPos: Vec3) {
+        const endPos = originalPos.clone().add3f(0, -50, 0);
+    
+        tween(slot.node)
+            .to(0.5, {
+                position: endPos,
+                scale: Vec3.ONE
+            }, { easing: 'sineInOut' })
+            .call(() => {
+                slot.node.setPosition(originalPos);
+                slot.color = originalColor;
+    
+                const uiOpacity = slot.node.getComponent(UIOpacity) || slot.node.addComponent(UIOpacity);
+                tween(uiOpacity)
+                    .to(0.5, { opacity: 255 }, { easing: 'sineInOut' })
+                    .start();
+    
+                //slot.spriteFrame = this.emptyLetterSlot;
+            })
+            .start();
+    }
+    
+    
 
     popEffect(node: Node) {
         tween(node)
@@ -255,16 +357,17 @@ export class RiddleManager extends Component {
             .start();
     }
 
-    wrongEffect(sprite: Sprite) {
+    wrongEffect(sprite: Sprite, onComplete?: () => void) {
         const originalPos = sprite.node.getPosition();
-        const shake = tween(sprite.node)
-            .repeat(5, tween(sprite.node).by(0.05, { position: new Vec3(5, 0) }).by(0.05, { position: new Vec3(-5, 0) }))
+        tween(sprite.node)
+            .repeat(3, tween().by(0.05, { position: new Vec3(5, 0) }).by(0.05, { position: new Vec3(-5, 0) }))
             .call(() => {
                 sprite.node.setPosition(originalPos);
-                sprite.spriteFrame = this.emptyLetterSlot;
-            });
-        shake.start();
+                if (onComplete) onComplete();
+            })
+            .start();
     }
+    
 
     updateScore() {
         this.scoreText.string = `Score: ${this.score}`;
